@@ -1,0 +1,20 @@
+name: diploma
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.14
+  - fastqc
+  - bbmap=39.26
+  - bwa
+  - samtools
+  - bcftools
+  - varscan
+  - qualimap
+  - vcftools
+  - glimpse-bio
+  - matplotlib
+  - pandas
+  - seaborn
+  - pysam
