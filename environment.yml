@@ -5,16 +5,29 @@ channels:
   - defaults
 dependencies:
   - python=3.14
-  - fastqc
-  - bbmap=39.26
-  - bwa
-  - samtools
-  - bcftools
-  - varscan
-  - qualimap
-  - vcftools
-  - glimpse-bio
+  - pip
+
+  - python-dotenv
+  - pydantic
+  - tabulate
   - matplotlib
   - pandas
   - seaborn
   - pysam
+
+  - flake8
+  - yapf
+
+  - bbmap=39.26
+  - bwa
+  - samtools
+  - bcftools
+  - htslib
+  - tabix
+  - varscan
+  - qualimap
+  - vcftools
+  - glimpse-bio
+
+  - pip:
+      - .

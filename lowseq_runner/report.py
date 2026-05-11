@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-
-import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -8,35 +5,12 @@ import pandas as pd
 import seaborn as sns
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Create plots and summary report for low-seq genotype concordance metrics."
-    )
-
-    parser.add_argument(
-        "--metrics-dir",
-        required=True,
-        help="Directory with *.metrics.tsv files.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        required=True,
-        help="Output directory for plots and summary tables.",
-    )
-    parser.add_argument(
-        "--title-prefix",
-        default="Low-pass sequencing",
-        help="Prefix for plot titles.",
-    )
-
-    return parser.parse_args()
-
-
 def read_metrics(metrics_dir: Path) -> pd.DataFrame:
     files = sorted(metrics_dir.glob("*.metrics.tsv"))
 
     if not files:
-        raise FileNotFoundError(f"No *.metrics.tsv files found in {metrics_dir}")
+        raise FileNotFoundError(
+            f"No *.metrics.tsv files found in {metrics_dir}")
 
     frames = []
     for path in files:
@@ -82,21 +56,14 @@ def summarize(data: pd.DataFrame) -> pd.DataFrame:
 
     available = [m for m in metrics if m in data.columns]
 
-    summary = (
-        data
-        .groupby(["sample", "method", "coverage"], as_index=False)
-        .agg(
-            **{
-                f"{m}_mean": (m, "mean")
-                for m in available
-            },
-            **{
-                f"{m}_sd": (m, "std")
-                for m in available
-            },
-            n_replicates=("replicate", "nunique"),
-        )
-    )
+    summary = data.groupby(["sample", "method", "coverage"],
+                           as_index=False).agg(
+                               **{f"{m}_mean": (m, "mean")
+                                  for m in available},
+                               **{f"{m}_sd": (m, "std")
+                                  for m in available},
+                               n_replicates=("replicate", "nunique"),
+                           )
 
     return summary
 
@@ -160,7 +127,7 @@ def save_pooled_lineplot(
     plt.close()
 
 
-def save_bar_ncompared(data: pd.DataFrame, output_path: Path, title: str):
+def save_ncompared_plot(data: pd.DataFrame, output_path: Path, title: str):
     plt.figure(figsize=(10, 6))
 
     sns.lineplot(
@@ -188,7 +155,7 @@ def make_markdown_report(
     summary: pd.DataFrame,
     output_dir: Path,
     title_prefix: str,
-):
+) -> Path:
     report_path = output_dir / "report.md"
 
     metrics_to_show = [
@@ -205,11 +172,16 @@ def make_markdown_report(
 
         f.write("## Input summary\n\n")
         f.write(f"- Number of metric rows: {len(data)}\n")
-        f.write(f"- Samples: {', '.join(map(str, sorted(data['sample'].unique())))}\n")
-        f.write(f"- Methods: {', '.join(map(str, sorted(data['method'].unique())))}\n")
         f.write(
-            f"- Coverages: {', '.join(map(lambda x: f'{x:g}', sorted(data['coverage'].dropna().unique())))}\n\n"
+            f"- Samples: {', '.join(map(str, sorted(data['sample'].unique())))}\n"
         )
+        f.write(
+            f"- Methods: {', '.join(map(str, sorted(data['method'].unique())))}\n"
+        )
+        f.write(
+            "- Coverages: "
+            f"{', '.join(map(lambda x: f'{x:g}', sorted(data['coverage'].dropna().unique())))}"
+            "\n\n")
 
         f.write("## Main plots\n\n")
 
@@ -225,8 +197,7 @@ def make_markdown_report(
 
         f.write("## Summary table\n\n")
         selected_cols = [
-            col for col in summary.columns
-            if col in [
+            col for col in summary.columns if col in [
                 "sample",
                 "method",
                 "coverage",
@@ -253,13 +224,12 @@ def make_markdown_report(
     return report_path
 
 
-def main():
-    args = parse_args()
-
-    metrics_dir = Path(args.metrics_dir).resolve()
-    output_dir = Path(args.output_dir).resolve()
+def generate_report(
+    metrics_dir: Path,
+    output_dir: Path,
+    title_prefix: str,
+) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-
     sns.set_theme(style="whitegrid")
 
     data = read_metrics(metrics_dir)
@@ -313,36 +283,34 @@ def main():
         if metric not in data.columns:
             continue
 
-        out = output_dir / f"{metric}.png"
         save_lineplot(
             data=data,
             y=metric,
-            output_path=out,
-            title=f"{args.title_prefix}: {title}",
+            output_path=output_dir / f"{metric}.png",
+            title=f"{title_prefix}: {title}",
             ylabel=ylabel,
         )
 
-        pooled_out = output_dir / f"{metric}.pooled.png"
         save_pooled_lineplot(
             data=data,
             y=metric,
-            output_path=pooled_out,
-            title=f"{args.title_prefix}: {title}, pooled samples",
+            output_path=output_dir / f"{metric}.pooled.png",
+            title=f"{title_prefix}: {title}, pooled samples",
             ylabel=ylabel,
         )
 
     if "n_compared" in data.columns:
-        save_bar_ncompared(
+        save_ncompared_plot(
             data=data,
             output_path=output_dir / "n_compared.png",
-            title=f"{args.title_prefix}: number of compared sites",
+            title=f"{title_prefix}: number of compared sites",
         )
 
     report_path = make_markdown_report(
         data=data,
         summary=summary,
         output_dir=output_dir,
-        title_prefix=args.title_prefix,
+        title_prefix=title_prefix,
     )
 
     print(f"All metrics: {all_metrics_path}")
@@ -350,6 +318,4 @@ def main():
     print(f"Report:      {report_path}")
     print(f"Plots:       {output_dir}")
 
-
-if __name__ == "__main__":
-    main()
+    return report_path

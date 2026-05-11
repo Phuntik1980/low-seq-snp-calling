@@ -188,7 +188,6 @@ fi
 # Directories
 # ============================================================
 
-TRIMMED_DIR="$OUTPUT_DIR/1_trimmed"
 SAMPLED_DIR="$OUTPUT_DIR/2_sampled"
 ALIGNED_DIR="$OUTPUT_DIR/3_aligned"
 MARKDUP_DIR="$OUTPUT_DIR/4_markdup"
@@ -199,7 +198,7 @@ IMPUTED_DIR="$OUTPUT_DIR/8_imputed"
 METRICS_DIR="$OUTPUT_DIR/9_metrics"
 RUN_META_DIR="$OUTPUT_DIR/00_run_metadata"
 
-mkdir -p "$TRIMMED_DIR" "$SAMPLED_DIR" "$ALIGNED_DIR" \
+mkdir -p "$SAMPLED_DIR" "$ALIGNED_DIR" \
          "$MARKDUP_DIR" "$FILTERED_DIR" "$COVERAGE_DIR" \
          "$VCF_DIR" "$IMPUTED_DIR" "$METRICS_DIR" "$RUN_META_DIR"
 
@@ -227,41 +226,6 @@ echo "Output:       $OUTPUT_DIR"
 echo "Threads:      $THREADS"
 echo "============================================================"
 
-# ============================================================
-# STAGE 2 - Trimming
-# ============================================================
-
-echo "STAGE 2 - Trimming"
-
-TRIMMED_R1="$TRIMMED_DIR/${SAMPLE}_R1_trimmed.fastq.gz"
-TRIMMED_R2="$TRIMMED_DIR/${SAMPLE}_R2_trimmed.fastq.gz"
-TRIMMED_FR1="$TRIMMED_DIR/${SAMPLE}_R1_trimmed_fixed.fastq.gz"
-TRIMMED_FR2="$TRIMMED_DIR/${SAMPLE}_R2_trimmed_fixed.fastq.gz"
-SINGLETONE="$TRIMMED_DIR/${SAMPLE}_singletones.fastq.gz"
-
-if [[ -f "$TRIMMED_R1" && -f "$TRIMMED_R2" ]]; then
-    echo "SKIP: trimming already done for $SAMPLE"
-else
-    "$BBDUK" \
-        in1="$R1" in2="$R2" \
-        out1="$TRIMMED_R1" out2="$TRIMMED_R2" \
-        ref="$BBDUK_REF_DIR/sequencing_artifacts.fa.gz,$BBDUK_REF_DIR/phix174_ill.ref.fa.gz,$BBDUK_REF_DIR/adapters.fa" \
-        k=31 ordered cardinality \
-        qtrim=rl trimq=20 maq=25 tbo mink=11 ktrim=r \
-        minlen=50 \
-        t="$BB_THREADS"
-
-    "$REPAIR" \
-        in1="$TRIMMED_R1" \
-        in2="$TRIMMED_R2" \
-        out1="$TRIMMED_FR1" \
-        out2="$TRIMMED_FR2" \
-        outsingle="$SINGLETONE" \
-        threads="$BB_THREADS"
-
-    mv "$TRIMMED_FR1" "$TRIMMED_R1"
-    mv "$TRIMMED_FR2" "$TRIMMED_R2"
-fi
 
 # ============================================================
 # STAGE 3 - Downsampling
