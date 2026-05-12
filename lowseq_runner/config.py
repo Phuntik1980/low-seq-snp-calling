@@ -104,8 +104,7 @@ def load_config(env_file: str | Path = ".env") -> LowseqConfig:
         glimpse_panel=Path(os.environ["LOWSEQ_GLIMPSE_PANEL"])
         if os.getenv("LOWSEQ_GLIMPSE_PANEL") else None,
         truth_dir=Path(os.environ["LOWSEQ_TRUTH_DIR"]),
-        truth_template=os.getenv("LOWSEQ_TRUTH_TEMPLATE",
-                                 "{sample}.truth.vcf.gz"),
+        truth_template=os.getenv("LOWSEQ_TRUTH_TEMPLATE"),
         samples=_csv_str(os.getenv("LOWSEQ_SAMPLES")),
         coverages=_csv_float(os.getenv("LOWSEQ_COVERAGES")),
         replicates=int(os.getenv("LOWSEQ_REPLICATES", "3")),
@@ -129,10 +128,7 @@ def load_config(env_file: str | Path = ".env") -> LowseqConfig:
         min_truth_dp=_optional_float(os.getenv("LOWSEQ_MIN_TRUTH_DP")),
         min_query_dp=_optional_float(os.getenv("LOWSEQ_MIN_QUERY_DP")),
         write_sites=_bool(os.getenv("LOWSEQ_WRITE_SITES"), False),
-        report_title_prefix=os.getenv(
-            "LOWSEQ_REPORT_TITLE_PREFIX",
-            "Low-pass SNP genotyping",
-        ),
+        report_title_prefix=os.getenv("LOWSEQ_REPORT_TITLE_PREFIX"),
         seed_base=int(os.getenv("LOWSEQ_SEED_BASE", "1000")),
         dry_run=_bool(os.getenv("LOWSEQ_DRY_RUN"), False),
     )
