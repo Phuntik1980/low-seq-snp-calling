@@ -49,6 +49,9 @@ def build_pipeline_command(
     seed: int,
     reference: Path,
     glimpse_panel: Optional[Path],
+    glimpse_sites_vcf: Optional[Path],
+    glimpse_sites_tsv: Optional[Path],
+    glimpse_chunks: Optional[Path],
     threads: int,
     skip_varscan: bool,
     skip_glimpse: bool,
@@ -75,6 +78,15 @@ def build_pipeline_command(
 
     if glimpse_panel:
         cmd.extend(["--glimpse-panel", str(glimpse_panel)])
+
+    if glimpse_sites_vcf:
+        cmd.extend(["--glimpse-sites-vcf", str(glimpse_sites_vcf)])
+
+    if glimpse_sites_tsv:
+        cmd.extend(["--glimpse-sites-tsv", str(glimpse_sites_tsv)])
+
+    if glimpse_chunks:
+        cmd.extend(["--glimpse-chunks", str(glimpse_chunks)])
 
     if skip_varscan:
         cmd.append("--skip-varscan")
@@ -113,6 +125,9 @@ def build_experiment_plan(config: LowseqConfig) -> list[dict]:
                     seed=seed,
                     reference=config.reference,
                     glimpse_panel=config.glimpse_panel,
+                    glimpse_sites_vcf=config.glimpse_sites_vcf,
+                    glimpse_sites_tsv=config.glimpse_sites_tsv,
+                    glimpse_chunks=config.glimpse_chunks,
                     threads=config.threads_per_run,
                     skip_varscan=config.skip_varscan,
                     skip_glimpse=config.skip_glimpse,

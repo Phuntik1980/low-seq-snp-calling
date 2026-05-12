@@ -32,7 +32,10 @@ Usage:
     --sample-reads N \\
     --seed SEED \\
     --reference REF.fa \\
-    [--glimpse-panel panel.vcf.gz] \\
+    --glimpse-panel panel.fixed.vcf.gz \\
+    --glimpse-sites-vcf panel.sites.vcf.gz \\
+    --glimpse-sites-tsv panel.sites.tsv.gz \\
+    --glimpse-chunks chunks.txt \\
     [--threads N] \\
     [--skip-varscan] \\
     [--skip-glimpse] \\
@@ -68,6 +71,11 @@ RUN_VARSCAN=1
 RUN_GLIMPSE=1
 RUN_QUALIMAP=1
 
+GLIMPSE2_REF_PANEL=""
+GLIMPSE2_SITES_VCF=""
+GLIMPSE2_SITES_TSV=""
+GLIMPSE2_CHUNKS=""
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --input-dir)
@@ -96,6 +104,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --glimpse-panel)
             GLIMPSE2_REF_PANEL="$2"
+            shift 2
+            ;;
+        --glimpse-sites-vcf)
+            GLIMPSE2_SITES_VCF="$2"
+            shift 2
+            ;;
+        --glimpse-sites-tsv)
+            GLIMPSE2_SITES_TSV="$2"
+            shift 2
+            ;;
+        --glimpse-chunks)
+            GLIMPSE2_CHUNKS="$2"
             shift 2
             ;;
         --threads)
@@ -138,6 +158,18 @@ REF_PATH="$(realpath "$REF_PATH")"
 
 if [[ -n "$GLIMPSE2_REF_PANEL" ]]; then
     GLIMPSE2_REF_PANEL="$(realpath "$GLIMPSE2_REF_PANEL")"
+fi
+
+if [[ -n "$GLIMPSE2_SITES_VCF" ]]; then
+    GLIMPSE2_SITES_VCF="$(realpath "$GLIMPSE2_SITES_VCF")"
+fi
+
+if [[ -n "$GLIMPSE2_SITES_TSV" ]]; then
+    GLIMPSE2_SITES_TSV="$(realpath "$GLIMPSE2_SITES_TSV")"
+fi
+
+if [[ -n "$GLIMPSE2_CHUNKS" ]]; then
+    GLIMPSE2_CHUNKS="$(realpath "$GLIMPSE2_CHUNKS")"
 fi
 
 BB_THREADS="$THREADS"
@@ -242,7 +274,7 @@ else
     echo "INFO: Downsampling $SAMPLE to ${SAMPLE_READS} reads/file, seed=${SAMPLE_SEED}"
 
     "$REFORMAT" \
-        in1="$TRIMMED_R1" in2="$TRIMMED_R2" \
+        in1="$R1" in2="$R2" \
         out1="$SAMPLED_R1" out2="$SAMPLED_R2" \
         samplereadstarget="$SAMPLE_READS" \
         sampleseed="$SAMPLE_SEED" \
@@ -447,571 +479,224 @@ fi
 # ============================================================
 
 echo "STAGE 9 - GLIMPSE2 imputation"
+
 IMPUTED_DIR_CHUNKS="$IMPUTED_DIR/chunks"
 IMPUTED_DIR_PHASED="$IMPUTED_DIR/phased"
 mkdir -p "$IMPUTED_DIR_CHUNKS" "$IMPUTED_DIR_PHASED"
 
 IMPUTED_VCF="$IMPUTED_DIR/${SAMPLE}.imputed.vcf.gz"
-CHUNKS_FILE="$IMPUTED_DIR_CHUNKS/chunks.txt"
 
 if [[ "$RUN_GLIMPSE" -eq 0 ]]; then
     echo "SKIP: GLIMPSE2 disabled"
+
 elif [[ -z "$GLIMPSE2_REF_PANEL" ]]; then
-    echo "WARN: GLIMPSE2 panel not provided, skipping imputation"
+    echo "WARN: GLIMPSE2 fixed panel not provided, skipping imputation"
+
+elif [[ -z "$GLIMPSE2_SITES_VCF" || -z "$GLIMPSE2_SITES_TSV" || -z "$GLIMPSE2_CHUNKS" ]]; then
+    echo "ERROR: GLIMPSE2 prepared files are required:"
+    echo "  --glimpse-panel      fixed panel VCF.gz"
+    echo "  --glimpse-sites-vcf  sites VCF.gz"
+    echo "  --glimpse-sites-tsv  sites TSV.gz"
+    echo "  --glimpse-chunks     chunks.txt"
+    exit 1
+
 else
-    echo "STAGE 9 - Импутация (GLIMPSE2)"
+    if [[ ! -f "$GLIMPSE2_REF_PANEL" ]]; then
+        echo "ERROR: fixed GLIMPSE2 panel not found: $GLIMPSE2_REF_PANEL"
+        exit 1
+    fi
 
+    if [[ ! -f "${GLIMPSE2_REF_PANEL}.tbi" && ! -f "${GLIMPSE2_REF_PANEL}.csi" ]]; then
+        echo "ERROR: fixed GLIMPSE2 panel index not found: ${GLIMPSE2_REF_PANEL}.tbi/.csi"
+        exit 1
+    fi
 
-  if [[ -f "$IMPUTED_VCF" && -f "${IMPUTED_VCF}.tbi" ]]; then
-      echo "SKIP: импутация уже выполнена для $SAMPLE"
-  else
-      # ------------------------------------------------------------------
-      # Проверяем наличие референсной панели
-      # ------------------------------------------------------------------
-      if [[ -z "$GLIMPSE2_REF_PANEL" || ! -f "$GLIMPSE2_REF_PANEL" ]]; then
-          echo "ERROR: Для GLIMPSE2 необходима референсная панель (4-й аргумент)."
-          exit 1
-      fi
+    if [[ ! -f "$GLIMPSE2_SITES_VCF" ]]; then
+        echo "ERROR: GLIMPSE2 sites VCF not found: $GLIMPSE2_SITES_VCF"
+        exit 1
+    fi
 
-      if [[ ! -f "${GLIMPSE2_REF_PANEL}.tbi" ]]; then
-          echo "INFO: Индекс референсной панели не найден, создаём..."
-          "$TABIX" -p vcf "$GLIMPSE2_REF_PANEL"
-      fi
+    if [[ ! -f "${GLIMPSE2_SITES_VCF}.tbi" && ! -f "${GLIMPSE2_SITES_VCF}.csi" ]]; then
+        echo "ERROR: GLIMPSE2 sites VCF index not found"
+        exit 1
+    fi
 
-      # ------------------------------------------------------------------
-      # ДИАГНОСТИКА имён хромосом
-      # ------------------------------------------------------------------
-      echo "--- Диагностика имён хромосом ---"
+    if [[ ! -f "$GLIMPSE2_SITES_TSV" ]]; then
+        echo "ERROR: GLIMPSE2 sites TSV not found: $GLIMPSE2_SITES_TSV"
+        exit 1
+    fi
 
-      BAM_CHROMS_FILE="$IMPUTED_DIR/bam_chroms.txt"
-      PANEL_CHROMS_FILE="$IMPUTED_DIR/panel_chroms.txt"
+    if [[ ! -f "${GLIMPSE2_SITES_TSV}.tbi" ]]; then
+        echo "ERROR: GLIMPSE2 sites TSV tabix index not found: ${GLIMPSE2_SITES_TSV}.tbi"
+        exit 1
+    fi
 
-      "$SAMTOOLS" view -H "$FILTERED_BAM" \
-          | grep "^@SQ" \
-          | sed 's/.*SN:\([^\t]*\).*/\1/' \
-          | sort > "$BAM_CHROMS_FILE"
+    if [[ ! -s "$GLIMPSE2_CHUNKS" ]]; then
+        echo "ERROR: GLIMPSE2 chunks file is empty or missing: $GLIMPSE2_CHUNKS"
+        exit 1
+    fi
 
-      "$BCFTOOLS" index -s "$GLIMPSE2_REF_PANEL" \
-          | cut -f1 \
-          | sort > "$PANEL_CHROMS_FILE"
+    if [[ -f "$IMPUTED_VCF" && -f "${IMPUTED_VCF}.tbi" ]]; then
+        echo "SKIP: imputation already done for $SAMPLE"
+    else
+        # ------------------------------------------------------------
+        # 9a. Generate GL VCF for current sample/run
+        # ------------------------------------------------------------
+        echo "--- 9a. Generate GL VCF by prepared panel sites ---"
 
-      echo "INFO: Хромосомы в BAM:"
-      cat "$BAM_CHROMS_FILE"
-      echo "---"
-      echo "INFO: Хромосомы в панели:"
-      cat "$PANEL_CHROMS_FILE"
-      echo "---"
+        SAMPLE_GL_VCF="$IMPUTED_DIR/${SAMPLE}.gl.vcf.gz"
 
-      # ------------------------------------------------------------------
-      # Автоматическое определение и создание таблицы переименования
-      # ------------------------------------------------------------------
-      RENAME_TABLE="$IMPUTED_DIR/chrom_rename.txt"
-      PANEL_RENAMED="$IMPUTED_DIR/ref_panel_renamed.vcf.gz"
-
-      # Проверяем прямое совпадение
-      DIRECT_COMMON=$(comm -12 \
-          "$BAM_CHROMS_FILE" \
-          "$PANEL_CHROMS_FILE" | wc -l)
-
-      echo "INFO: Прямых совпадений хромосом: $DIRECT_COMMON"
-
-      if [[ "$DIRECT_COMMON" -eq 0 ]]; then
-          echo "INFO: Прямых совпадений нет — пробуем автоматическое переименование..."
-
-          # Берём первую хромосому из каждого файла для определения паттерна
-          BAM_FIRST=$(head -1 "$BAM_CHROMS_FILE")
-          PANEL_FIRST=$(head -1 "$PANEL_CHROMS_FILE")
-
-          echo "INFO: Пример BAM:   '$BAM_FIRST'"
-          echo "INFO: Пример панели: '$PANEL_FIRST'"
-
-          # Определяем направление переименования
-          # Случай 1: панель = "Chr01", BAM = "glyma.Wm82.gnm4.Gm01" (соя)
-          # Случай 2: панель = "1", BAM = "chr1"
-          # Случай 3: панель = "chr1", BAM = "1"
-          # Случай 4: панель = "Gm01", BAM = "glyma.Wm82.gnm4.Gm01"
-
-          > "$RENAME_TABLE"
-
-      while IFS= read -r PANEL_CHR; do
-        BAM_MATCH=""
-
-        # Попытка 1: точное совпадение последнего компонента (после последней точки)
-        # glyma.Wm82.gnm4.Gm01 → суффикс "Gm01"
-        PANEL_SUFFIX=$(echo "$PANEL_CHR" | rev | cut -d'.' -f1 | rev)
-
-        if [[ -n "$PANEL_SUFFIX" ]]; then
-          # Ищем строку где суффикс после последней точки совпадает точно
-          while IFS= read -r B; do
-            B_SUFFIX=$(echo "$B" | rev | cut -d'.' -f1 | rev)
-            if [[ "$B_SUFFIX" == "$PANEL_SUFFIX" ]]; then
-              BAM_MATCH="$B"
-              break
-            fi
-          done < "$BAM_CHROMS_FILE"
-        fi
-
-        # Попытка 2: числовое ядро совпадает (для chr1 vs 1 vs Gm01)
-        if [[ -z "$BAM_MATCH" ]]; then
-          PANEL_NUM=$(echo "$PANEL_CHR" | grep -oP '\d+' | tail -1)
-          if [[ -n "$PANEL_NUM" ]]; then
-            # Нормализуем: убираем ведущие нули для сравнения
-            PANEL_NUM_NORM=$(echo "$PANEL_NUM" | sed 's/^0*//')
-            while IFS= read -r B; do
-              B_NUM=$(echo "$B" | grep -oP '\d+' | tail -1)
-              B_NUM_NORM=$(echo "$B_NUM" | sed 's/^0*//')
-              if [[ -n "$B_NUM_NORM" && "$B_NUM_NORM" == "$PANEL_NUM_NORM" ]]; then
-                BAM_MATCH="$B"
-                break
-              fi
-            done < "$BAM_CHROMS_FILE"
-          fi
-        fi
-
-        # Попытка 3: панель содержится как точный суффикс BAM (chr → chromosome)
-        if [[ -z "$BAM_MATCH" ]]; then
-          while IFS= read -r B; do
-            if [[ "$B" == *".$PANEL_CHR" || "$B" == *"_${PANEL_CHR}" ]]; then
-              BAM_MATCH="$B"
-              break
-            fi
-          done < "$BAM_CHROMS_FILE"
-        fi
-
-        if [[ -n "$BAM_MATCH" ]]; then
-          echo -e "${PANEL_CHR}\t${BAM_MATCH}" >> "$RENAME_TABLE"
+        if [[ -f "$SAMPLE_GL_VCF" && -f "${SAMPLE_GL_VCF}.tbi" ]]; then
+            echo "SKIP: GL VCF already exists: $SAMPLE_GL_VCF"
         else
-          echo "WARN: Не найдено соответствие для панельной хромосомы: $PANEL_CHR"
+            "$BCFTOOLS" mpileup \
+                --threads "$THREADS" \
+                --fasta-ref "$REF_PATH" \
+                --min-MQ 20 \
+                --min-BQ 20 \
+                -I \
+                -E \
+                -a 'FORMAT/DP,FORMAT/AD' \
+                -T "$GLIMPSE2_SITES_VCF" \
+                -Ou \
+                "$FILTERED_BAM" \
+            | "$BCFTOOLS" call \
+                --threads "$THREADS" \
+                -Aim \
+                -C alleles \
+                -T "$GLIMPSE2_SITES_TSV" \
+                -Oz -o "$SAMPLE_GL_VCF"
+
+            EXIT_CODE=$?
+
+            if [[ $EXIT_CODE -ne 0 || ! -f "$SAMPLE_GL_VCF" ]]; then
+                echo "ERROR: bcftools mpileup|call failed with code $EXIT_CODE"
+                exit 1
+            fi
+
+            "$BCFTOOLS" index -t --threads "$THREADS" "$SAMPLE_GL_VCF"
+
+            N_GL=$("$BCFTOOLS" view -H "$SAMPLE_GL_VCF" | wc -l)
+            echo "INFO: GL VCF sites: $N_GL"
+
+            if [[ "$N_GL" -eq 0 ]]; then
+                echo "ERROR: GL VCF is empty"
+                exit 1
+            fi
         fi
 
-      done < "$PANEL_CHROMS_FILE"
+        # ------------------------------------------------------------
+        # 9b. Determine adaptive GLIMPSE2 parameters
+        # ------------------------------------------------------------
+        echo "--- 9b. Determine GLIMPSE2 parameters ---"
 
-          echo "INFO: Таблица переименования ($RENAME_TABLE):"
-          cat "$RENAME_TABLE"
+        N_REF_HAPS=$(( $("$BCFTOOLS" query -l "$GLIMPSE2_REF_PANEL" | wc -l) * 2 ))
 
-          if [[ ! -s "$RENAME_TABLE" ]]; then
-              echo "ERROR: Не удалось автоматически сопоставить хромосомы."
-              echo "ERROR: Создайте вручную файл $RENAME_TABLE"
-              echo "ERROR: Формат (TSV): OLD_PANEL_NAME<TAB>BAM_NAME"
-              echo "ERROR: Пример:"
-              echo "ERROR:   Chr01<TAB>glyma.Wm82.gnm4.Gm01"
-              echo "ERROR:   Chr02<TAB>glyma.Wm82.gnm4.Gm02"
-              exit 1
-          fi
+        if (( N_REF_HAPS <= 2000 )); then
+            KPBWT=$(( N_REF_HAPS / 2 ))
+            KINIT=$(( N_REF_HAPS / 2 ))
 
-          RENAMED_COUNT=$(wc -l < "$RENAME_TABLE")
-          echo "INFO: Сопоставлено $RENAMED_COUNT хромосом"
+            if (( KPBWT < 100 )); then
+                KPBWT=100
+            fi
 
-          # Переименовываем хромосомы в референсной панели
-      if [[ ! -f "$PANEL_RENAMED" || ! -f "${PANEL_RENAMED}.tbi" ]]; then
-        echo "INFO: Переименование хромосом в референсной панели..."
+            if (( KINIT < 100 )); then
+                KINIT=100
+            fi
 
-        PANEL_RENAMED_UNSORTED="${PANEL_RENAMED%.vcf.gz}.unsorted.vcf.gz"
-
-        "$BCFTOOLS" annotate \
-          --threads "$THREADS" \
-          --rename-chrs "$RENAME_TABLE" \
-          "$GLIMPSE2_REF_PANEL" \
-          -Oz -o "$PANEL_RENAMED_UNSORTED"
-
-        if [[ $? -ne 0 || ! -f "$PANEL_RENAMED_UNSORTED" ]]; then
-          echo "ERROR: bcftools annotate --rename-chrs завершился с ошибкой"
-          exit 1
+            echo "INFO: panel has $N_REF_HAPS haplotypes; using --Kinit $KINIT --Kpbwt $KPBWT"
+        else
+            KPBWT=2000
+            KINIT=1000
         fi
 
-        # ВАЖНО: сортируем после переименования, т.к. порядок записей может нарушиться
-        echo "INFO: Сортировка переименованной панели..."
-        "$BCFTOOLS" sort \
-          -Oz -o "$PANEL_RENAMED" \
-          -T "$IMPUTED_DIR/bcftools_sort_tmp" \
-          "$PANEL_RENAMED_UNSORTED"
+        # ------------------------------------------------------------
+        # 9c. GLIMPSE2_phase by prepared chunks
+        # ------------------------------------------------------------
+        echo "--- 9c. GLIMPSE2_phase by prepared chunks ---"
 
-        if [[ $? -ne 0 || ! -f "$PANEL_RENAMED" ]]; then
-          echo "ERROR: bcftools sort завершился с ошибкой"
-          exit 1
+        PHASE_DONE_FLAG="$IMPUTED_DIR_PHASED/.phase.done"
+
+        if [[ -f "$PHASE_DONE_FLAG" ]]; then
+            echo "SKIP: phase chunks already done"
+        else
+            while IFS=$'\t' read -r ID CHR IRG ORG REST; do
+                [[ -z "$ID" || "$ID" == \#* ]] && continue
+
+                PHASED_CHUNK="$IMPUTED_DIR_PHASED/${SAMPLE}.${CHR}.chunk${ID}.bcf"
+
+                if [[ -f "$PHASED_CHUNK" && -f "${PHASED_CHUNK}.csi" ]]; then
+                    echo "SKIP: chunk $ID ($IRG) already phased"
+                    continue
+                fi
+
+                echo "INFO: Phasing chunk ID=$ID CHR=$CHR IRG=$IRG ORG=$ORG"
+
+                "$GLIMPSE2_PHASE" \
+                    --input-gl "$SAMPLE_GL_VCF" \
+                    --reference "$GLIMPSE2_REF_PANEL" \
+                    --input-region "$IRG" \
+                    --output-region "$ORG" \
+                    --output "$PHASED_CHUNK" \
+                    --Kinit "$KINIT" \
+                    --Kpbwt "$KPBWT" \
+                    --threads "$THREADS"
+
+                EXIT_CODE=$?
+
+                if [[ $EXIT_CODE -ne 0 || ! -f "$PHASED_CHUNK" ]]; then
+                    echo "ERROR: GLIMPSE2_phase failed with code $EXIT_CODE"
+                    echo "ERROR: ID=$ID IRG=$IRG ORG=$ORG"
+                    exit 1
+                fi
+
+                "$BCFTOOLS" index -f "$PHASED_CHUNK"
+
+            done < "$GLIMPSE2_CHUNKS"
+
+            touch "$PHASE_DONE_FLAG"
         fi
 
-        rm -f "$PANEL_RENAMED_UNSORTED"
+        # ------------------------------------------------------------
+        # 9d. GLIMPSE2_ligate
+        # ------------------------------------------------------------
+        echo "--- 9d. GLIMPSE2_ligate ---"
 
-        "$BCFTOOLS" index -t --threads "$THREADS" "$PANEL_RENAMED"
+        PHASED_LIST="$IMPUTED_DIR_PHASED/phased_chunks.list"
 
-        if [[ $? -ne 0 ]]; then
-          echo "ERROR: bcftools index завершился с ошибкой для $PANEL_RENAMED"
-          exit 1
+        while IFS=$'\t' read -r ID CHR _; do
+            [[ -z "$ID" || "$ID" == \#* ]] && continue
+
+            f="$IMPUTED_DIR_PHASED/${SAMPLE}.${CHR}.chunk${ID}.bcf"
+
+            if [[ -f "$f" ]]; then
+                echo "$f"
+            else
+                echo "ERROR: missing phased chunk: $f"
+                exit 1
+            fi
+        done < "$GLIMPSE2_CHUNKS" > "$PHASED_LIST"
+
+        if [[ ! -s "$PHASED_LIST" ]]; then
+            echo "ERROR: phased chunks list is empty"
+            exit 1
         fi
 
-        echo "INFO: Переименованная панель → $PANEL_RENAMED"
+        "$GLIMPSE2_LIGATE" \
+            --input "$PHASED_LIST" \
+            --output "$IMPUTED_VCF" \
+            --threads 4
 
-        # Проверяем результат
-        echo "INFO: Хромосомы в переименованной панели:"
-        "$BCFTOOLS" index -s "$PANEL_RENAMED" | cut -f1
-      fi
+        if [[ $? -ne 0 || ! -f "$IMPUTED_VCF" ]]; then
+            echo "ERROR: GLIMPSE2_ligate did not create $IMPUTED_VCF"
+            exit 1
+        fi
 
-          GLIMPSE2_REF_PANEL="$PANEL_RENAMED"
+        "$BCFTOOLS" index -t --threads "$THREADS" "$IMPUTED_VCF"
 
-          # Обновляем список хромосом панели после переименования
-          "$BCFTOOLS" index -s "$PANEL_RENAMED" \
-              | cut -f1 \
-              | sort > "$PANEL_CHROMS_FILE"
-
-          # Финальная проверка совпадения
-          FINAL_COMMON=$(comm -12 \
-              "$BAM_CHROMS_FILE" \
-              "$PANEL_CHROMS_FILE" | wc -l)
-
-          echo "INFO: Совпадений после переименования: $FINAL_COMMON"
-
-          if [[ "$FINAL_COMMON" -eq 0 ]]; then
-              echo "ERROR: После переименования совпадений всё равно нет."
-              echo "ERROR: Проверьте таблицу $RENAME_TABLE вручную."
-              exit 1
-          fi
-      fi
-
-      # ------------------------------------------------------------------
-      # 9a. Подготовка референсной панели для GLIMPSE2
-      # ------------------------------------------------------------------
-      # Корневая причина ошибки "AC/AN INFO fields are inconsistent with GT":
-      # GLIMPSE2 требует AN == 2*Nsamples на КАЖДОМ сайте панели (полная диплоидная
-      # панель без missing). bcftools +fill-tags считает AN только по присутствующим
-      # аллелям, поэтому даже один './.' даёт AN < 2N → mismatch → фатал.
-      # Решение: сначала отбросить все сайты, где у любого образца есть './.',
-      # затем фазировать, пересчитать AC/AN, удалить мономорфные сайты.
-      # ------------------------------------------------------------------
-      echo "--- 9a. Подготовка референсной панели для GLIMPSE2 ---"
-      GLIMPSE2_REF_PANEL_FIXED="${GLIMPSE2_REF_PANEL%.vcf.gz}.fixed.vcf.gz"
-
-      if [[ -f "$GLIMPSE2_REF_PANEL_FIXED" && -f "${GLIMPSE2_REF_PANEL_FIXED}.tbi" ]]; then
-          echo "SKIP: исправленная панель уже существует → $GLIMPSE2_REF_PANEL_FIXED"
-      else
-          N_SAMPLES=$("$BCFTOOLS" query -l "$GLIMPSE2_REF_PANEL" | wc -l)
-          EXPECTED_AN=$((N_SAMPLES * 2))
-          echo "INFO: Образцов в панели: $N_SAMPLES (ожидаемое AN = $EXPECTED_AN)"
-
-          echo "INFO: norm → biallelic SNP → fill missing GT with REF → phase → strip INFO → fill AC/AN → drop monomorphic"
-
-          # 1. norm     — split multi-allelic, левосдвиг (важно для AC/AN consistency)
-          # 2. view     — оставить только биаллельные SNP
-          # 3. setGT . 0 — заменить ВСЕ missing-аллели (./. и .|.) на REF (0)
-          #               (стандартный приём для imputation-панелей; не теряем сайты,
-          #               где у некоторых образцов нет покрытия)
-          # 4. setGT a p — все генотипы → phased (| вместо /)
-          # 5. annotate — удалить все INFO и все FORMAT кроме GT
-          # 6. fill-tags — пересчитать AC/AN/AF/NS с нуля; теперь AN == 2*Nsamples везде
-          # 7. view     — убрать мономорфные сайты (AC==0 || AC==AN)
-          # Стратегия:
-          #   bcftools norm -m -any      — split multi-allelic. ПОБОЧКА: создаёт
-          #     haploid '.' для сэмплов, у которых аллели не попали в данный
-          #     биаллельный split. setGT '-n 0' тогда выдаёт haploid '0' → AN<2N.
-          #   setGT -t . -n 0             — заполнить полностью missing diploid (./.)
-          #   setGT -t ./x -n 0           — заполнить partially missing (./0, .|1)
-          #   setGT -t a -n p             — phase all
-          #   final view AN==EXP_AN       — отбросить редкие сайты с остаточным
-          #     haploid (норм-побочка) и сайты, где даже после fill-tags AN<2N.
-          EXP_AN="$EXPECTED_AN"
-          "$BCFTOOLS" norm --threads "$THREADS" -f "$REF_PATH" -m -any "$GLIMPSE2_REF_PANEL" -Ou \
-          | "$BCFTOOLS" view --threads "$THREADS" -m 2 -M 2 -v snps -Ou \
-          | "$BCFTOOLS" +setGT -Ou -- -t . -n 0 \
-          | "$BCFTOOLS" +setGT -Ou -- -t ./x -n 0 \
-          | "$BCFTOOLS" +setGT -Ou -- -t a -n p \
-          | "$BCFTOOLS" annotate --threads "$THREADS" -x 'INFO,^FORMAT/GT' -Ou \
-          | "$BCFTOOLS" +fill-tags -Ou -- -t AC,AN,AF,NS \
-          | "$BCFTOOLS" view --threads "$THREADS" \
-              -e "AC==0 || AC==AN || INFO/AN!=$EXP_AN" \
-              -Oz -o "$GLIMPSE2_REF_PANEL_FIXED"
-
-          if [[ $? -ne 0 || ! -f "$GLIMPSE2_REF_PANEL_FIXED" ]]; then
-              echo "ERROR: Не удалось создать исправленную панель"
-              exit 1
-          fi
-
-          "$BCFTOOLS" index -t -f --threads "$THREADS" "$GLIMPSE2_REF_PANEL_FIXED"
-          N_SITES=$("$BCFTOOLS" index -n "$GLIMPSE2_REF_PANEL_FIXED" 2>/dev/null \
-                    || "$BCFTOOLS" view -H "$GLIMPSE2_REF_PANEL_FIXED" | wc -l)
-          echo "INFO: Исправленная панель → $GLIMPSE2_REF_PANEL_FIXED ($N_SITES сайтов)"
-
-          # ---- Sanity check: убеждаемся, что AN == 2*Nsamples везде ----
-          echo "INFO: Проверка консистентности AC/AN..."
-          # ВАЖНО: имя awk-переменной должно НЕ совпадать со встроенной функцией (exp, log, ...)
-          N_BAD=$("$BCFTOOLS" query -f '%INFO/AN\n' "$GLIMPSE2_REF_PANEL_FIXED" \
-                  | awk -v want="$EXPECTED_AN" '$1 != want' | wc -l)
-          if [[ "$N_BAD" -gt 0 ]]; then
-              echo "ERROR: $N_BAD сайтов имеют AN != $EXPECTED_AN"
-              echo "ERROR: Примеры:"
-              "$BCFTOOLS" query -f '%CHROM\t%POS\t%INFO/AC\t%INFO/AN\n' "$GLIMPSE2_REF_PANEL_FIXED" \
-                  | awk -v want="$EXPECTED_AN" '$4 != want' | head -5
-              exit 1
-          fi
-          echo "INFO: OK — все $N_SITES сайтов имеют AN == $EXPECTED_AN"
-
-          # ---- Проверка фазированности (первые 10000 GT) ----
-          N_UNPHASED=$("$BCFTOOLS" query -f '[%GT\n]' "$GLIMPSE2_REF_PANEL_FIXED" \
-                       | head -10000 | grep -c '/' || true)
-          if [[ "$N_UNPHASED" -gt 0 ]]; then
-              echo "WARN: В панели осталось $N_UNPHASED нефазированных GT (из первых 10000)"
-          else
-              echo "INFO: Все генотипы успешно фазированы (проверка первых 10000)"
-          fi
-      fi
-
-      GLIMPSE2_REF_PANEL_WORK="$GLIMPSE2_REF_PANEL_FIXED"
-
-      # ------------------------------------------------------------------
-      # 9b. Генерация GL по сайтам ref-панели
-      # ------------------------------------------------------------------
-      echo "--- 9b. Генерация GL по сайтам ref-панели ---"
-      SAMPLE_GL_VCF="$IMPUTED_DIR/${SAMPLE}.gl.vcf.gz"
-
-      if [[ -f "$SAMPLE_GL_VCF" && -f "${SAMPLE_GL_VCF}.tbi" ]]; then
-          echo "SKIP: GL VCF уже создан для $SAMPLE"
-      else
-          SITES_VCF="$IMPUTED_DIR/ref_panel_sites.vcf.gz"
-          SITES_TSV="$IMPUTED_DIR/ref_panel_sites.tsv.gz"
-
-          if [[ ! -f "$SITES_VCF" || ! -f "${SITES_VCF}.tbi" ]]; then
-              echo "INFO: Извлечение сайтов из ref-панели..."
-              "$BCFTOOLS" view \
-                  -G \
-                  "$GLIMPSE2_REF_PANEL_WORK" \
-                  -Oz -o "$SITES_VCF"
-              "$BCFTOOLS" index -t --threads "$THREADS" "$SITES_VCF"
-          fi
-
-          if [[ ! -f "$SITES_TSV" || ! -f "${SITES_TSV}.tbi" ]]; then
-              echo "INFO: Создание TSV сайтов..."
-              "$BCFTOOLS" query \
-                  -f '%CHROM\t%POS\t%REF,%ALT\n' \
-                  "$SITES_VCF" \
-              | "$BGZIP" -c > "$SITES_TSV"
-              "$TABIX" -s1 -b2 -e2 "$SITES_TSV"
-          fi
-
-          # Добавляем ##contig строки из BAM в заголовок SITES_VCF
-          SITES_VCF_REHEADERED="$IMPUTED_DIR/ref_panel_sites.reheadered.vcf.gz"
-
-          if [[ ! -f "$SITES_VCF_REHEADERED" || ! -f "${SITES_VCF_REHEADERED}.tbi" ]]; then
-              echo "INFO: Добавление ##contig строк из BAM в заголовок SITES_VCF..."
-
-              CONTIG_HEADER="$IMPUTED_DIR/contig_header.txt"
-              "$SAMTOOLS" view -H "$FILTERED_BAM" \
-                  | grep "^@SQ" \
-                  | awk '{
-                      name=""; length=""
-                      for(i=1;i<=NF;i++){
-                          if($i ~ /^SN:/) name=substr($i,4)
-                          if($i ~ /^LN:/) length=substr($i,4)
-                      }
-                      if(name!="" && length!="")
-                          print "##contig=<ID="name",length="length">"
-                  }' > "$CONTIG_HEADER"
-
-              echo "INFO: Контигов из BAM: $(wc -l < "$CONTIG_HEADER")"
-
-              # Собираем новый заголовок: мета-строки + новые контиги + #CHROM
-              NEW_HEADER="$IMPUTED_DIR/new_header.txt"
-              {
-                  "$BCFTOOLS" view -h "$SITES_VCF" \
-                      | grep -v "^##contig" \
-                      | grep -v "^#CHROM"
-                  cat "$CONTIG_HEADER"
-                  "$BCFTOOLS" view -h "$SITES_VCF" | grep "^#CHROM"
-              } > "$NEW_HEADER"
-
-              "$BCFTOOLS" reheader \
-                  -h "$NEW_HEADER" \
-                  "$SITES_VCF" \
-                  -o "$SITES_VCF_REHEADERED"
-
-              if [[ $? -ne 0 || ! -f "$SITES_VCF_REHEADERED" ]]; then
-                  echo "ERROR: bcftools reheader завершился с ошибкой"
-                  exit 1
-              fi
-
-              "$BCFTOOLS" index -t --threads "$THREADS" "$SITES_VCF_REHEADERED"
-              echo "INFO: Reheadered SITES_VCF → $SITES_VCF_REHEADERED"
-          fi
-
-          echo "INFO: Запуск bcftools mpileup | call..."
-
-          "$BCFTOOLS" mpileup \
-              --threads "$THREADS" \
-              --fasta-ref "$REF_PATH" \
-              --min-MQ 20 \
-              --min-BQ 20 \
-              -I \
-              -E \
-              -a 'FORMAT/DP,FORMAT/AD' \
-              -T "$SITES_VCF_REHEADERED" \
-              -Ou \
-              "$FILTERED_BAM" \
-          | "$BCFTOOLS" call \
-              --threads "$THREADS" \
-              -Aim \
-              -C alleles \
-              -T "$SITES_TSV" \
-              -Oz -o "$SAMPLE_GL_VCF"
-
-          EXIT_CODE=$?
-
-          if [[ $EXIT_CODE -ne 0 || ! -f "$SAMPLE_GL_VCF" ]]; then
-              echo "ERROR: bcftools mpileup|call завершился с кодом $EXIT_CODE"
-              exit 1
-          fi
-
-          "$BCFTOOLS" index -t --threads "$THREADS" "$SAMPLE_GL_VCF"
-          N_GL=$("$BCFTOOLS" view -H "$SAMPLE_GL_VCF" | wc -l)
-          echo "INFO: GL VCF содержит $N_GL сайтов → $SAMPLE_GL_VCF"
-
-          if [[ "$N_GL" -eq 0 ]]; then
-              echo "ERROR: GL VCF пустой!"
-              exit 1
-          fi
-      fi
-
-      # ------------------------------------------------------------------
-      # 9c. GLIMPSE2_chunk
-      # ------------------------------------------------------------------
-      echo "--- 9c. GLIMPSE2_chunk ---"
-
-      if [[ -f "$CHUNKS_FILE" && -s "$CHUNKS_FILE" ]]; then
-          echo "SKIP: чанки уже созданы → $CHUNKS_FILE"
-      else
-          > "$CHUNKS_FILE"
-
-          # Используем только хромосомы общие для BAM и (переименованной) панели
-          while IFS= read -r CHR; do
-              echo "INFO: Чанкинг хромосомы $CHR"
-              CHUNK_TMP="$IMPUTED_DIR_CHUNKS/chunks_${CHR}.txt"
-
-              "$GLIMPSE2_CHUNK" \
-                  --input "$GLIMPSE2_REF_PANEL_WORK" \
-                  --region "$CHR" \
-                  --window-mb 2 \
-                  --buffer-mb 0.4 \
-                  --sequential \
-                  --output "$CHUNK_TMP"
-
-              if [[ $? -ne 0 || ! -s "$CHUNK_TMP" ]]; then
-                  echo "WARN: GLIMPSE2_chunk не создал чанки для $CHR, пропускаем"
-                  continue
-              fi
-
-              cat "$CHUNK_TMP" >> "$CHUNKS_FILE"
-              echo "INFO: $CHR: $(wc -l < "$CHUNK_TMP") чанков"
-
-          done < <(comm -12 "$BAM_CHROMS_FILE" "$PANEL_CHROMS_FILE")
-
-          if [[ ! -s "$CHUNKS_FILE" ]]; then
-              echo "ERROR: Ни одного чанка не создано"
-              exit 1
-          fi
-
-          echo "INFO: Всего чанков: $(wc -l < "$CHUNKS_FILE")"
-      fi
-
-      # ------------------------------------------------------------------
-      # 9d. GLIMPSE2_phase
-      # ------------------------------------------------------------------
-      echo "--- 9d. GLIMPSE2_phase (по чанкам) ---"
-
-      PHASE_DONE_FLAG="$IMPUTED_DIR_PHASED/.phase.done"
-
-      # Адаптивные параметры PBWT под маленькую панель.
-      # Default Kpbwt=2000 рассчитан на панель типа 1KG (5008 hap).
-      # Если в нашей панели меньше 2000 гаплотипов, PBWT-селекция короткозамыкается
-      # (Kpbwt >= n_ref_haps → "No PBWT selection" → "States for individual 0 are zero").
-      # Решение: выставить Kpbwt и Kinit ниже числа гаплотипов в панели.
-      N_REF_HAPS=$(( $("$BCFTOOLS" query -l "$GLIMPSE2_REF_PANEL_WORK" | wc -l) * 2 ))
-      if (( N_REF_HAPS <= 2000 )); then
-          KPBWT=$(( N_REF_HAPS / 2 ))
-          KINIT=$(( N_REF_HAPS / 2 ))
-          if (( KPBWT < 100 )); then KPBWT=100; fi
-          if (( KINIT < 100 )); then KINIT=100; fi
-          echo "INFO: панель имеет $N_REF_HAPS гаплотипов; используем --Kinit $KINIT --Kpbwt $KPBWT"
-      else
-          KPBWT=2000
-          KINIT=1000
-      fi
-
-      if [[ -f "$PHASE_DONE_FLAG" ]]; then
-          echo "SKIP: фазирование чанков уже выполнено"
-      else
-          while IFS=$'\t' read -r ID CHR IRG ORG REST; do
-              [[ -z "$ID" || "$ID" == \#* ]] && continue
-
-              # Chunk ID нумеруется ПЕР-хромосомно (0,1,...) → имя файла должно
-              # включать хромосому, иначе chunk0 из Gm02 затрёт chunk0 из Gm01.
-              PHASED_CHUNK="$IMPUTED_DIR_PHASED/${SAMPLE}.${CHR}.chunk${ID}.bcf"
-
-              if [[ -f "$PHASED_CHUNK" && -f "${PHASED_CHUNK}.csi" ]]; then
-                  echo "SKIP: чанк $ID ($IRG) уже обработан"
-                  continue
-              fi
-
-              echo "INFO: Фазирование чанка $ID — input: $IRG  output: $ORG"
-
-              "$GLIMPSE2_PHASE" \
-                  --input-gl "$SAMPLE_GL_VCF" \
-                  --reference "$GLIMPSE2_REF_PANEL_WORK" \
-                  --input-region "$IRG" \
-                  --output-region "$ORG" \
-                  --output "$PHASED_CHUNK" \
-                  --Kinit "$KINIT" \
-                  --Kpbwt "$KPBWT" \
-                  --threads "$THREADS"
-
-              EXIT_CODE=$?
-
-              if [[ $EXIT_CODE -ne 0 || ! -f "$PHASED_CHUNK" ]]; then
-                  echo "ERROR: GLIMPSE2_phase завершился с кодом $EXIT_CODE"
-                  echo "ERROR: ID=$ID  IRG=$IRG  ORG=$ORG"
-                  exit 1
-              fi
-
-              "$BCFTOOLS" index -f "$PHASED_CHUNK"
-              echo "INFO: Чанк $ID → $PHASED_CHUNK"
-
-          done < "$CHUNKS_FILE"
-
-          touch "$PHASE_DONE_FLAG"
-          echo "INFO: Все чанки успешно обработаны"
-      fi
-
-      # ------------------------------------------------------------------
-      # 9e. GLIMPSE2_ligate
-      # ------------------------------------------------------------------
-      echo "--- 9e. GLIMPSE2_ligate ---"
-
-      PHASED_LIST="$IMPUTED_DIR_PHASED/phased_chunks.list"
-      # Сортируем по (CHR, ID) — нужно для GLIMPSE2_ligate (порядок чанков должен
-      # совпадать с порядком в исходном CHUNKS_FILE).
-      while IFS=$'\t' read -r ID CHR _ ; do
-          [[ -z "$ID" || "$ID" == \#* ]] && continue
-          f="$IMPUTED_DIR_PHASED/${SAMPLE}.${CHR}.chunk${ID}.bcf"
-          [[ -f "$f" ]] && echo "$f"
-      done < "$CHUNKS_FILE" > "$PHASED_LIST"
-
-      if [[ ! -s "$PHASED_LIST" ]]; then
-          echo "ERROR: Не найдены фазированные чанки"
-          exit 1
-      fi
-
-      echo "INFO: Сборка $(wc -l < "$PHASED_LIST") чанков (GLIMPSE2_ligate)"
-
-      "$GLIMPSE2_LIGATE" \
-          --input "$PHASED_LIST" \
-          --output "$IMPUTED_VCF" \
-          --threads 4
-
-      if [[ $? -ne 0 || ! -f "$IMPUTED_VCF" ]]; then
-          echo "ERROR: GLIMPSE2_ligate не создал $IMPUTED_VCF"
-          exit 1
-      fi
-
-      "$BCFTOOLS" index -t --threads "$THREADS" "$IMPUTED_VCF"
-      echo "INFO: Импутированный VCF → $IMPUTED_VCF"
-      "$BCFTOOLS" stats "$IMPUTED_VCF" | grep "^SN"
-  fi
+        echo "INFO: Imputed VCF: $IMPUTED_VCF"
+        "$BCFTOOLS" stats "$IMPUTED_VCF" | grep "^SN"
+    fi
 fi
 
 # ============================================================
