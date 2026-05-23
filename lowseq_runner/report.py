@@ -9,7 +9,8 @@ def read_metrics(metrics_dir: Path) -> pd.DataFrame:
     files = sorted(metrics_dir.glob("*.metrics.tsv"))
 
     if not files:
-        raise FileNotFoundError(f"No *.metrics.tsv files found in {metrics_dir}")
+        raise FileNotFoundError(
+            f"No *.metrics.tsv files found in {metrics_dir}")
 
     frames = []
     for path in files:
@@ -51,7 +52,7 @@ def read_metrics(metrics_dir: Path) -> pd.DataFrame:
             data[col] = pd.to_numeric(data[col], errors="coerce")
 
     if "coverage" in data.columns:
-        data["coverage_label"] = data["coverage"].map(lambda x: f"{x:g}x")
+        data["coverage_label"] = data["coverage"].map(lambda x: f"{x: g}x")
 
     return data
 
@@ -78,22 +79,25 @@ def summarize(data: pd.DataFrame) -> pd.DataFrame:
 
     available = [m for m in metrics if m in data.columns]
 
-    summary = data.groupby(["sample", "method", "coverage"], as_index=False).agg(
-        **{f"{m}_mean": (m, "mean") for m in available},
-        **{f"{m}_sd": (m, "std") for m in available},
-        n_replicates=("replicate", "nunique"),
-    )
+    summary = data.groupby(["sample", "method", "coverage"],
+                           as_index=False).agg(
+                               **{f"{m}_mean": (m, "mean")
+                                  for m in available},
+                               **{f"{m}_sd": (m, "std")
+                                  for m in available},
+                               n_replicates=("replicate", "nunique"),
+                           )
 
     return summary
 
 
 def save_lineplot(
-    data: pd.DataFrame,
-    y: str,
-    output_path: Path,
-    title: str,
-    ylabel: str,
-    ylim: tuple[float, float] | None = (0, 1.02),
+        data: pd.DataFrame,
+        y: str,
+        output_path: Path,
+        title: str,
+        ylabel: str,
+        ylim: tuple[float, float] | None = (0, 1.02),
 ):
     plt.figure(figsize=(9, 6))
 
@@ -122,12 +126,12 @@ def save_lineplot(
 
 
 def save_pooled_lineplot(
-    data: pd.DataFrame,
-    y: str,
-    output_path: Path,
-    title: str,
-    ylabel: str,
-    ylim: tuple[float, float] | None = (0, 1.02),
+        data: pd.DataFrame,
+        y: str,
+        output_path: Path,
+        title: str,
+        ylabel: str,
+        ylim: tuple[float, float] | None = (0, 1.02),
 ):
     plt.figure(figsize=(9, 6))
 
@@ -179,18 +183,18 @@ def save_ncompared_plot(data: pd.DataFrame, output_path: Path, title: str):
 
 def _coverage_order(data: pd.DataFrame) -> list[str]:
     covs = sorted(data["coverage"].dropna().unique())
-    return [f"{x:g}x" for x in covs]
+    return [f"{x: g}x" for x in covs]
 
 
 def save_metric_boxplot(
-    data: pd.DataFrame,
-    y: str,
-    output_path: Path,
-    title: str,
-    ylabel: str,
-    xlabel: str = "Imputed dataset",
-    baseline: float | None = None,
-    ylim: tuple[float, float] | None = (0, 1.02),
+        data: pd.DataFrame,
+        y: str,
+        output_path: Path,
+        title: str,
+        ylabel: str,
+        xlabel: str = "Imputed dataset",
+        baseline: float | None = None,
+        ylim: tuple[float, float] | None = (0, 1.02),
 ):
     plot_data = data.dropna(subset=[y, "coverage_label"]).copy()
 
@@ -212,10 +216,23 @@ def save_metric_boxplot(
         width=0.65,
         showfliers=True,
         linewidth=1.0,
-        medianprops={"color": "black", "linewidth": 1.8},
-        boxprops={"edgecolor": "black", "linewidth": 0.8},
-        whiskerprops={"color": "black", "linestyle": "--", "linewidth": 0.8},
-        capprops={"color": "black", "linewidth": 0.8},
+        medianprops={
+            "color": "black",
+            "linewidth": 1.8
+        },
+        boxprops={
+            "edgecolor": "black",
+            "linewidth": 0.8
+        },
+        whiskerprops={
+            "color": "black",
+            "linestyle": "--",
+            "linewidth": 0.8
+        },
+        capprops={
+            "color": "black",
+            "linewidth": 0.8
+        },
     )
 
     sns.stripplot(
@@ -236,7 +253,7 @@ def save_metric_boxplot(
             color="gray",
             linestyle=":",
             linewidth=1.2,
-            label=f"Baseline = {baseline:.3f}",
+            label=f"Baseline = {baseline: .3f}",
         )
         plt.legend(loc="lower right")
 
@@ -254,12 +271,12 @@ def save_metric_boxplot(
 
 
 def save_sample_faceted_boxplot(
-    data: pd.DataFrame,
-    y: str,
-    output_path: Path,
-    title: str,
-    ylabel: str,
-    ylim: tuple[float, float] | None = (0, 1.02),
+        data: pd.DataFrame,
+        y: str,
+        output_path: Path,
+        title: str,
+        ylabel: str,
+        ylim: tuple[float, float] | None = (0, 1.02),
 ):
     plot_data = data.dropna(subset=[y, "coverage_label"]).copy()
 
@@ -281,8 +298,15 @@ def save_sample_faceted_boxplot(
         palette=sns.color_palette("Blues", n_colors=max(len(order), 3)),
         showfliers=True,
         linewidth=1.0,
-        medianprops={"color": "black", "linewidth": 1.6},
-        whiskerprops={"color": "black", "linestyle": "--", "linewidth": 0.8},
+        medianprops={
+            "color": "black",
+            "linewidth": 1.6
+        },
+        whiskerprops={
+            "color": "black",
+            "linestyle": "--",
+            "linewidth": 0.8
+        },
     )
 
     g.set_axis_labels("Target coverage", ylabel)
@@ -308,7 +332,8 @@ def save_sensitivity_specificity_panel(
     if not required.issubset(set(data.columns)):
         return
 
-    plot_data = data.dropna(subset=["sensitivity", "specificity", "coverage_label"]).copy()
+    plot_data = data.dropna(
+        subset=["sensitivity", "specificity", "coverage_label"]).copy()
 
     if plot_data.empty:
         return
@@ -326,8 +351,15 @@ def save_sensitivity_specificity_panel(
         palette=palette,
         ax=axes[0],
         width=0.65,
-        medianprops={"color": "black", "linewidth": 1.8},
-        whiskerprops={"color": "black", "linestyle": "--", "linewidth": 0.8},
+        medianprops={
+            "color": "black",
+            "linewidth": 1.8
+        },
+        whiskerprops={
+            "color": "black",
+            "linestyle": "--",
+            "linewidth": 0.8
+        },
     )
     sns.stripplot(
         data=plot_data,
@@ -354,8 +386,15 @@ def save_sensitivity_specificity_panel(
         palette=palette,
         ax=axes[1],
         width=0.65,
-        medianprops={"color": "black", "linewidth": 1.8},
-        whiskerprops={"color": "black", "linestyle": "--", "linewidth": 0.8},
+        medianprops={
+            "color": "black",
+            "linewidth": 1.8
+        },
+        whiskerprops={
+            "color": "black",
+            "linestyle": "--",
+            "linewidth": 0.8
+        },
     )
     sns.stripplot(
         data=plot_data,
@@ -374,7 +413,8 @@ def save_sensitivity_specificity_panel(
     axes[1].set_ylim(0.95, 1.0005)
     axes[1].grid(True, axis="y", alpha=0.25)
 
-    fig.suptitle(f"{title_prefix}: sensitivity and specificity", fontweight="bold")
+    fig.suptitle(f"{title_prefix}: sensitivity and specificity",
+                 fontweight="bold")
     plt.tight_layout()
     plt.savefig(output_path, dpi=300)
     plt.close()
@@ -409,7 +449,8 @@ def make_markdown_report(
         ("f1_score.boxplot.png", "F1-score boxplot"),
         ("dosage_r2.boxplot.png", "Dosage R² boxplot"),
         ("dosage_pearson_r.boxplot.png", "Dosage correlation boxplot"),
-        ("sensitivity_specificity.panel.png", "Sensitivity and specificity panel"),
+        ("sensitivity_specificity.panel.png",
+         "Sensitivity and specificity panel"),
         ("f1_score.by_sample.boxplot.png", "F1-score by sample"),
         ("dosage_r2.by_sample.boxplot.png", "Dosage R² by sample"),
     ]
@@ -419,36 +460,40 @@ def make_markdown_report(
 
         f.write("## Input summary\n\n")
         f.write(f"- Number of metric rows: {len(data)}\n")
-        f.write(f"- Samples: {', '.join(map(str, sorted(data['sample'].unique())))}\n")
-        f.write(f"- Methods: {', '.join(map(str, sorted(data['method'].unique())))}\n")
         f.write(
-            "- Coverages: "
-            f"{', '.join(map(lambda x: f'{x:g}', sorted(data['coverage'].dropna().unique())))}"
-            "\n\n"
-        )
+            f"- Samples: {', '.join(map(str, sorted(data['sample'].unique())))}"
+            f"\n")
+        f.write(
+            f"- Methods: {', '.join(map(str, sorted(data['method'].unique())))}"
+            f"\n")
+        _coverages = (', '.join(
+            map(lambda x: f'{x: g}',
+                sorted(data['coverage'].dropna().unique()))))
+        f.write(f"- Coverages: {_coverages}\n\n")
 
         if "n_compared" in data.columns:
-            f.write(f"- Median compared sites: {data['n_compared'].median():.0f}\n")
+            f.write(f"- Median compared sites: "
+                    f"{data['n_compared'].median(): .0f}\n")
         if "n_dosage_pairs" in data.columns:
-            f.write(f"- Median dosage pairs: {data['n_dosage_pairs'].median():.0f}\n")
+            f.write(
+                f"- Median dosage pairs: {data['n_dosage_pairs'].median(): .0f}"
+                f"\n")
 
         f.write("\n")
 
         f.write("## Additional metrics\n\n")
         f.write(
             "- **Sensitivity / recall**: TP / (TP + FN), where positive means "
-            "truth genotype contains at least one ALT allele.\n"
-        )
-        f.write(
-            "- **Specificity**: TN / (TN + FP), where negative means truth genotype "
-            "is homozygous reference.\n"
-        )
+            "truth genotype contains at least one ALT allele.\n")
+        f.write("- **Specificity**: TN / (TN + FP), "
+                "where negative means truth genotype "
+                "is homozygous reference.\n")
         f.write("- **Precision**: TP / (TP + FP).\n")
         f.write("- **F1-score**: harmonic mean of precision and recall.\n")
-        f.write(
-            "- **Dosage R²**: squared Pearson correlation between truth ALT dosage "
-            "and query ALT dosage. For diploid biallelic SNPs dosage is 0, 1 or 2.\n\n"
-        )
+        f.write("- **Dosage R²**: squared "
+                "Pearson correlation between truth ALT dosage "
+                "and query ALT dosage. For diploid biallelic "
+                "SNPs dosage is 0, 1 or 2.\n\n")
 
         f.write("## Main line plots\n\n")
 
@@ -477,8 +522,7 @@ def make_markdown_report(
         f.write("## Summary table\n\n")
 
         selected_cols = [
-            col for col in summary.columns
-            if col in [
+            col for col in summary.columns if col in [
                 "sample",
                 "method",
                 "coverage",

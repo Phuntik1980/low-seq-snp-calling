@@ -17,7 +17,7 @@ def get_query_vcf(output_dir: Path, sample: str, vcf_kind: str) -> Path:
 
 
 def safe_cov_label_from_manifest(row: dict) -> str:
-    return row.get("coverage_label") or f"{float(row['coverage']):g}x".replace(
+    return row.get("coverage_label") or f"{float(row['coverage']): g}x".replace(
         ".", "p")
 
 
@@ -111,15 +111,13 @@ def run_metrics(config: LowseqConfig, manifest: Path | None = None) -> Path:
             job = future_to_job[future]
             try:
                 future.result()
-                print(
-                    "[METRICS DONE] "
-                    f"{job['sample']} cov={job['coverage']} rep={job['replicate']}"
-                )
+                print("[METRICS DONE] "
+                      f"{job['sample']} cov={job['coverage']}"
+                      f" rep={job['replicate']}")
             except Exception as exc:
-                print(
-                    "[METRICS FAIL] "
-                    f"{job['sample']} cov={job['coverage']} rep={job['replicate']}: {exc}"
-                )
+                print("[METRICS FAIL] "
+                      f"{job['sample']} cov={job['coverage']}"
+                      f" rep={job['replicate']}: {exc}")
                 failed.append((job, exc))
 
     if failed:

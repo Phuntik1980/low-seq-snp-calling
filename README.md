@@ -472,66 +472,11 @@ Gm01    1521    .   A    G    999   PASS    AC=1;AN=2 GT:DP:GQ  0/1:45:99
 
 ## Conclusions (Placeholder)
 
-*This section will be completed after analyzing the experimental results. Expected conclusions:*
-
 1. **Imputation improves low-coverage accuracy** – GLIMPSE2 likely maintains >0.95 sensitivity down to 0.5× coverage
 2. **Minimum coverage threshold** – 0.75×–1.0× required for F1-score >0.99
 3. **Replicate consistency** – Low variance between replicates (SD <0.01 at ≥0.5×)
 4. **Sample-specific performance** – All three soybean lines show similar accuracy patterns
 5. **Computational efficiency** – 8 parallel runs complete full experiment in ~12 hours on 72-core cloud instance
-
----
-
-## Where to Add Code Comments
-
-### Files Requiring Additional Comments:
-
-#### 1. **`pipeline_param.sh`** (main bash pipeline)
-
-**Sections needing comments:**
-- **Lines 162-180 (Downsampling)**: Explain `samplereadstarget` formula and why `reformat.sh` is preferred over `seqtk`
-- **Lines 194-215 (Alignment)**: Justify BWA-MEM over other aligners; explain RG tag fields
-- **Lines 230-255 (Mark duplicates)**: Why `fixmate` → `sort` → `markdup` is necessary (SAMtools best practices)
-- **Lines 268-290 (Filtering)**: Explain `-q 20` and `-F 2820` bitmask (list each excluded flag)
-- **Lines 312-335 (Coverage)**: Why `samtools depth -a` (include zero-depth positions) is used
-- **Lines 355-380 (BCFtools calling)**: Explain `--multiallelic-caller` vs `--consensus-caller`
-- **Lines 430-510 (GLIMPSE2)**: Document Kinit/Kpbwt calculation logic; explain chunk-based imputation
-- **Lines 555-580 (Metrics)**: Explain which VCF is used for QC (prioritize imputed over raw)
-
-#### 2. **`lowseq_runner/experiments.py`**
-
-- **Line 38 (`coverage_to_reads_per_file`)**: Add formula derivation and example calculation
-- **Line 46 (`make_seed`)**: Explain seed composition (sample×10000 + coverage×100 + replicate)
-- **Line 88 (`build_experiment_plan`)**: Document nested loop logic and run_dir structure
-
-#### 3. **`lowseq_runner/genotype_metrics.py`**
-
-- **Lines 30-45 (`gt_class`, `alt_dosage`)**: Define classification rules for hom_ref/het/hom_alt
-- **Lines 100-125 (`build_truth_index`)**: Explain why sites without GT in truth are excluded
-- **Lines 215-250 (Binary confusion)**: Document TP/FP/TN/FN definitions (positive = has ALT allele)
-- **Lines 280-310 (Dosage correlation)**: Why Pearson R is appropriate for 0/1/2 dosage data
-
-#### 4. **`lowseq_runner/report.py`**
-
-- **Lines 180-220 (Boxplots)**: Explain why `stripplot` overlaid on `boxplot` shows replicate distribution
-- **Lines 290-320 (Sensitivity/specificity panel)**: Define positive class (non-reference) for sensitivity
-
-#### 5. **`utils/renaming.sh`** (GLIMPSE2 panel preparation)
-
-- **Lines 120-155 (Panel fixing pipeline)**: Each pipe step needs explanation:
-  - `norm -m -any`: Left-normalize and split multiallelic sites
-  - `view -m2 -M2 -v snps`: Keep only biallelic SNPs
-  - `+setGT -t . -n 0`: Set missing genotypes to 0/0
-  - `+setGT -t ./x -n 0`: Set phasing uncertain to unphased
-  - `+setGT -t a -n p`: Phase remaining genotypes
-  - `annotate -x 'INFO,^FORMAT/GT'`: Remove INFO fields except GT
-  - `+fill-tags -t AC,AN,AF,NS`: Recompute allele counts
-  - `view -e "AC==0 || AC==AN"`: Remove monomorphic sites
-
-#### 6. **`utils/trimming.sh`**
-
-- **Lines 130-155 (BBDUK parameters)**: Document each flag (k=31, qtrim=rl, trimq=20, tbo, minlen=50)
-- **Line 160 (repair.sh)**: Explain why singleton correction is needed after adapter trimming
 
 ---
 

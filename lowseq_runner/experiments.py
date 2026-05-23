@@ -11,9 +11,9 @@ from lowseq_runner.shell import quote_cmd, run_to_log
 def read_genome_size_from_fai(reference: Path) -> int:
     fai = Path(str(reference) + ".fai")
     if not fai.exists():
-        raise FileNotFoundError(
-            f"Genome size was not provided and FASTA index was not found: {fai}. "
-            f"Run: samtools faidx {reference}")
+        raise FileNotFoundError(f"Genome size was not provided and FASTA index"
+                                f" was not found: {fai}. "
+                                f"Run: samtools faidx {reference}")
 
     total = 0
     with fai.open() as f:
@@ -27,17 +27,21 @@ def read_genome_size_from_fai(reference: Path) -> int:
 
 def coverage_to_reads_per_file(coverage: float, genome_size: int,
                                read_length: int) -> int:
+    # Add formula derivation and example calculation
     reads = coverage * genome_size / (2.0 * read_length)
     return max(1, int(round(reads)))
 
 
 def safe_cov_label(cov: float) -> str:
-    return f"{str(f'{cov:g}').replace('.', 'p')}x"
+    return f"{str(f'{cov: g}').replace('.', 'p')}x"
 
 
 def make_seed(seed_base: int, sample_index: int, coverage_index: int,
               replicate_index: int) -> int:
-    return seed_base + sample_index * 10000 + coverage_index * 100 + replicate_index
+    # Explain seed composition (sample×10000 + coverage×100 + replicate)
+    seed = (seed_base + sample_index * 10000 + coverage_index * 100 +
+            replicate_index)
+    return seed
 
 
 def build_pipeline_command(
@@ -99,12 +103,16 @@ def build_pipeline_command(
 
 
 def build_experiment_plan(config: LowseqConfig) -> list[dict]:
+    """
+        Document nested loop logic and run_dir structure
+    """
     genome_size = config.genome_size or read_genome_size_from_fai(
         config.reference)
     rows: list[dict] = []
 
     for sample_idx, sample in enumerate(config.samples):
-        input_dir = config.input_root if config.input_mode == "root" else config.input_root / sample
+        input_dir = (config.input_root if config.input_mode == "root" else
+                     config.input_root / sample)
 
         for cov_idx, cov in enumerate(config.coverages):
             cov_label = safe_cov_label(cov)
@@ -113,7 +121,8 @@ def build_experiment_plan(config: LowseqConfig) -> list[dict]:
 
             for rep in range(1, config.replicates + 1):
                 seed = make_seed(config.seed_base, sample_idx, cov_idx, rep)
-                run_dir = config.output_root / sample / f"cov_{cov_label}" / f"rep_{rep}"
+                run_dir = (config.output_root / sample / f"cov_{cov_label}" /
+                           f"rep_{rep}")
                 log_path = run_dir / "pipeline.log"
 
                 cmd = build_pipeline_command(
@@ -263,6 +272,6 @@ def run_experiments(config: LowseqConfig) -> Path:
         message = "\n".join(
             f"exit={ret}, log={row['_log']}, cmd={row['command']}"
             for ret, row in failed)
-        raise RuntimeError(f"{len(failed)} pipeline runs failed:\n{message}")
+        raise RuntimeError(f"{len(failed)} pipeline runs failed: \n{message}")
 
     return manifest_path

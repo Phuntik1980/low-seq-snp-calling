@@ -20,6 +20,9 @@ def normalize_gt(gt) -> Optional[tuple[int, ...]]:
 
 
 def gt_class(gt: Optional[tuple[int, ...]]) -> str:
+    """
+    Define classification rules for hom_ref/het/hom_alt
+    """
     if gt is None:
         return "missing"
 
@@ -119,10 +122,14 @@ def build_truth_index(
     min_truth_gq,
     min_truth_dp,
 ) -> dict[tuple[str, int, str, tuple[str, ...]], tuple[tuple[int, ...], str]]:
+    """
+    Explain why sites without GT in truth are excluded
+    """
     truth_vcf = pysam.VariantFile(str(truth_vcf_path))
 
     if truth_sample not in truth_vcf.header.samples:
-        raise ValueError(f"Truth sample '{truth_sample}' not found in {truth_vcf_path}")
+        raise ValueError(
+            f"Truth sample '{truth_sample}' not in {truth_vcf_path}")
 
     index = {}
 
@@ -137,9 +144,9 @@ def build_truth_index(
         sample_data = rec.samples[truth_sample]
 
         if not sample_passes_thresholds(
-            sample_data,
-            min_gq=min_truth_gq,
-            min_dp=min_truth_dp,
+                sample_data,
+                min_gq=min_truth_gq,
+                min_dp=min_truth_dp,
         ):
             continue
 
@@ -159,7 +166,8 @@ def rate(num: int, den: int) -> Optional[float]:
     return num / den
 
 
-def f1_score(precision: Optional[float], recall: Optional[float]) -> Optional[float]:
+def f1_score(precision: Optional[float],
+             recall: Optional[float]) -> Optional[float]:
     if precision is None or recall is None:
         return None
     if precision + recall == 0:
@@ -229,7 +237,7 @@ def compute_genotype_metrics(
     query_vcf_obj = pysam.VariantFile(str(query_vcf))
 
     if sample not in query_vcf_obj.header.samples:
-        raise ValueError(f"Query sample '{sample}' not found in {query_vcf}")
+        raise ValueError(f"Query sample '{sample}' not in {query_vcf}")
 
     counters = Counter()
     confusion = Counter()
@@ -291,9 +299,9 @@ def compute_genotype_metrics(
             sample_data = rec.samples[sample]
 
             if not sample_passes_thresholds(
-                sample_data,
-                min_gq=min_query_gq,
-                min_dp=min_query_dp,
+                    sample_data,
+                    min_gq=min_query_gq,
+                    min_dp=min_query_dp,
             ):
                 counters["query_records_sample_threshold_fail"] += 1
                 continue
@@ -405,76 +413,118 @@ def compute_genotype_metrics(
     dosage_r2 = pearson_r2(truth_dosages, query_dosages)
 
     metrics = {
-        "sample": sample,
-        "truth_sample": truth_sample,
-        "coverage": coverage,
-        "replicate": replicate,
-        "method": method,
-        "truth_vcf": str(truth_vcf),
-        "query_vcf": str(query_vcf),
-        "n_truth_index_sites": len(truth_index),
-        "n_query_records_total": counters["query_records_total"],
-        "n_compared": n,
+        "sample":
+        sample,
+        "truth_sample":
+        truth_sample,
+        "coverage":
+        coverage,
+        "replicate":
+        replicate,
+        "method":
+        method,
+        "truth_vcf":
+        str(truth_vcf),
+        "query_vcf":
+        str(query_vcf),
+        "n_truth_index_sites":
+        len(truth_index),
+        "n_query_records_total":
+        counters["query_records_total"],
+        "n_compared":
+        n,
 
         # Existing concordance metrics.
-        "n_exact_match": counters["n_exact_match"],
-        "exact_match_rate": rate(counters["n_exact_match"], n),
-        "n_alt_presence_match": counters["n_alt_presence_match"],
-        "alt_presence_match_rate": rate(counters["n_alt_presence_match"], n),
-        "n_het_status_match": counters["n_het_status_match"],
-        "het_status_match_rate": rate(counters["n_het_status_match"], n),
+        "n_exact_match":
+        counters["n_exact_match"],
+        "exact_match_rate":
+        rate(counters["n_exact_match"], n),
+        "n_alt_presence_match":
+        counters["n_alt_presence_match"],
+        "alt_presence_match_rate":
+        rate(counters["n_alt_presence_match"], n),
+        "n_het_status_match":
+        counters["n_het_status_match"],
+        "het_status_match_rate":
+        rate(counters["n_het_status_match"], n),
 
         # Class-specific metrics.
-        "truth_hom_ref": counters["truth_hom_ref"],
-        "hom_ref_match_rate": rate(
+        "truth_hom_ref":
+        counters["truth_hom_ref"],
+        "hom_ref_match_rate":
+        rate(
             counters["truth_hom_ref_called_hom_ref"],
             counters["truth_hom_ref"],
         ),
-        "truth_het": counters["truth_het"],
-        "het_recall": rate(
+        "truth_het":
+        counters["truth_het"],
+        "het_recall":
+        rate(
             counters["truth_het_called_het"],
             counters["truth_het"],
         ),
-        "truth_hom_alt": counters["truth_hom_alt"],
-        "hom_alt_recall": rate(
+        "truth_hom_alt":
+        counters["truth_hom_alt"],
+        "hom_alt_recall":
+        rate(
             counters["truth_hom_alt_called_hom_alt"],
             counters["truth_hom_alt"],
         ),
-        "truth_nonref": counters["truth_nonref"],
-        "nonref_exact_match_rate": rate(
+        "truth_nonref":
+        counters["truth_nonref"],
+        "nonref_exact_match_rate":
+        rate(
             counters["truth_nonref_exact"],
             counters["truth_nonref"],
         ),
-        "alt_recall": rate(
+        "alt_recall":
+        rate(
             counters["truth_nonref_called_nonref"],
             counters["truth_nonref"],
         ),
 
         # New binary ALT-presence classification metrics.
-        "binary_tp": tp,
-        "binary_fp": fp,
-        "binary_tn": tn,
-        "binary_fn": fn,
-        "precision": precision,
-        "positive_predictive_value": precision,
-        "recall": recall,
-        "sensitivity": recall,
-        "specificity": specificity,
-        "f1_score": f1,
+        "binary_tp":
+        tp,
+        "binary_fp":
+        fp,
+        "binary_tn":
+        tn,
+        "binary_fn":
+        fn,
+        "precision":
+        precision,
+        "positive_predictive_value":
+        precision,
+        "recall":
+        recall,
+        "sensitivity":
+        recall,
+        "specificity":
+        specificity,
+        "f1_score":
+        f1,
 
         # New dosage correlation metrics.
-        "n_dosage_pairs": len(truth_dosages),
-        "dosage_pearson_r": dosage_r,
-        "dosage_r2": dosage_r2,
+        "n_dosage_pairs":
+        len(truth_dosages),
+        "dosage_pearson_r":
+        dosage_r,
+        "dosage_r2":
+        dosage_r2,
 
         # Diagnostics.
-        "query_records_not_in_truth": counters["query_records_not_in_truth"],
-        "query_gt_missing": counters["query_gt_missing"],
+        "query_records_not_in_truth":
+        counters["query_records_not_in_truth"],
+        "query_gt_missing":
+        counters["query_gt_missing"],
     }
 
     metrics_path = Path(str(output_prefix) + ".metrics.tsv")
     with metrics_path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(metrics.keys()), delimiter="\t")
+        writer = csv.DictWriter(f,
+                                fieldnames=list(metrics.keys()),
+                                delimiter="\t")
         writer.writeheader()
         writer.writerow(metrics)
 
@@ -510,7 +560,9 @@ def compute_genotype_metrics(
     with binary_confusion_path.open("w", newline="") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["sample", "coverage", "replicate", "method", "class", "count"],
+            fieldnames=[
+                "sample", "coverage", "replicate", "method", "class", "count"
+            ],
             delimiter="\t",
         )
         writer.writeheader()

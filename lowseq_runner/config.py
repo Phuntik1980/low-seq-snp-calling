@@ -104,10 +104,14 @@ def load_config(env_file: str | Path = ".env") -> LowseqConfig:
         input_root=Path(os.environ["LOWSEQ_INPUT_ROOT"]),
         output_root=Path(os.environ["LOWSEQ_OUTPUT_ROOT"]),
         reference=Path(os.environ["LOWSEQ_REFERENCE"]),
-        glimpse_panel=Path(os.environ["LOWSEQ_GLIMPSE_PANEL"]) if os.getenv("LOWSEQ_GLIMPSE_PANEL") else None,
-        glimpse_sites_vcf=Path(os.environ["LOWSEQ_GLIMPSE_SITES_VCF"]) if os.getenv("LOWSEQ_GLIMPSE_SITES_VCF") else None,
-        glimpse_sites_tsv=Path(os.environ["LOWSEQ_GLIMPSE_SITES_TSV"]) if os.getenv("LOWSEQ_GLIMPSE_SITES_TSV") else None,
-        glimpse_chunks=Path(os.environ["LOWSEQ_GLIMPSE_CHUNKS"]) if os.getenv("LOWSEQ_GLIMPSE_CHUNKS") else None,
+        glimpse_panel=(Path(os.environ["LOWSEQ_GLIMPSE_PANEL"])
+                       if os.getenv("LOWSEQ_GLIMPSE_PANEL") else None),
+        glimpse_sites_vcf=(Path(os.environ["LOWSEQ_GLIMPSE_SITES_VCF"])
+                           if os.getenv("LOWSEQ_GLIMPSE_SITES_VCF") else None),
+        glimpse_sites_tsv=(Path(os.environ["LOWSEQ_GLIMPSE_SITES_TSV"])
+                           if os.getenv("LOWSEQ_GLIMPSE_SITES_TSV") else None),
+        glimpse_chunks=(Path(os.environ["LOWSEQ_GLIMPSE_CHUNKS"])
+                        if os.getenv("LOWSEQ_GLIMPSE_CHUNKS") else None),
         truth_dir=Path(os.environ["LOWSEQ_TRUTH_DIR"]),
         truth_template=os.getenv("LOWSEQ_TRUTH_TEMPLATE"),
         samples=_csv_str(os.getenv("LOWSEQ_SAMPLES")),
