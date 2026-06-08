@@ -484,19 +484,18 @@ Gm01    1521    .   A    G    999   PASS    AC=1;AN=2 GT:DP:GQ  0/1:45:99
 
 ### Software & Tools
 
-1. **BWA-MEM**: Li H. (2013) Aligning sequence reads, clone sequences and assembly contigs with BWA-MEM. *arXiv:1303.3997*
-2. **SAMtools**: Danecek P., et al. (2021) Twelve years of SAMtools and BCFtools. *GigaScience*, 10(2)
-3. **BCFtools**: Danecek P., McCarthy S.A. (2017) BCFtools/csq: haplotype-aware variant consequences. *Bioinformatics*, 33(13)
-4. **BBMap**: Bushnell B. (2014) BBMap short read aligner. *SourceForge*
-5. **GLIMPSE2**: Rubinacci S., et al. (2021) Efficient phasing and imputation of low-coverage sequencing data using GLIMPSE2. *Nature Genetics*, 53:120-126
-6. **QualiMap**: Okonechnikov K., et al. (2016) QualiMap 2: advanced multi-sample quality control for high-throughput sequencing data. *Bioinformatics*, 32(2)
-7. **VarScan**: Koboldt D.C., et al. (2012) VarScan 2: somatic mutation and copy number alteration discovery in cancer by exome sequencing. *Genome Research*, 22(3)
+1. **BWA-MEM**: Li H. (2013) Aligning sequence reads, clone sequences and assembly contigs with BWA-MEM. *arXiv:1303.3997v2*
+3. **SAMtools**: Danecek P., et al. (2021) Twelve years of SAMtools and BCFtools. *GigaScience*, 10(2)
+4. **BCFtools**: Danecek P., McCarthy S.A. (2017) BCFtools/csq: haplotype-aware variant consequences. *Bioinformatics*, 33(13)
+5. **BBMap**: Bushnell B. (2014) BBMap: A Fast, Accurate, Splice-Aware Aligner. *SourceForge*
+7. **GLIMPSE2**: Rubinacci S., et al. (2022) Imputation of low-coverage sequencing data from 150,119 UK Biobank genomes. *BiorXiv*
+9. **QualiMap**: Okonechnikov K., et al. (2016) QualiMap 2: advanced multi-sample quality control for high-throughput sequencing data. *Bioinformatics*, 32(2)
+10. **VarScan**: Koboldt D.C., et al. (2012) VarScan 2: somatic mutation and copy number alteration discovery in cancer by exome sequencing. *Genome Research*, 22(3)
 
 ### Data Sources
 
 1. **Soybean Reference Genome** (Glycine max Wm82.gnm4):
-   - Schmutz J., et al. (2010) Genome sequence of the palaeopolyploid soybean. *Nature*, 463:178-183
-   - Download: [Phytozome](https://phytozome-next.jgi.doe.gov/)
+   - Download: [legumeinfo](https://data.legumeinfo.org/Glycine/max/genomes/Wm82.gnm4.4PTR/glyma.Wm82.gnm4.4PTR.genome_main.fna.gz)
 
 2. **GLIMPSE2 Reference Panel**:
    - Generated from high-coverage soybean WGS data (30×) for 50+ accessions
@@ -516,7 +515,7 @@ Gm01    1521    .   A    G    999   PASS    AC=1;AN=2 GT:DP:GQ  0/1:45:99
 
 ## License
 
-MIT License (see LICENSE file)
+ License (see LICENSE file)
 
 ## Authors
 
@@ -533,12 +532,12 @@ MIT License (see LICENSE file)
 
 ## Acknowledgments
 
-This work was supported by [funding sources]. We thank the Yandex Cloud team for providing computational resources.
+This work was supported by OilGene.
 
 ---
 
 ## Contact
 
 For questions or issues, please open an issue on GitHub or contact:
-- Elena Ivankina: [email@example.com]
+- Elena Ivankina: dora.phillips67@gmail.com
 - Maria Biktasheva: marybikt@gmail.com
