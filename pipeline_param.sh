@@ -71,6 +71,14 @@ RUN_VARSCAN=1
 RUN_GLIMPSE=1
 RUN_QUALIMAP=1
 
+BAM_QUALITY=20
+
+# This flag means to exclude reads that^
+# * are unmapped
+# * are secondary or supplementary alignments
+# * failed quality control
+FILTER_FLAGS=2820
+
 GLIMPSE2_REF_PANEL=""
 GLIMPSE2_SITES_VCF=""
 GLIMPSE2_SITES_TSV=""
@@ -369,8 +377,8 @@ else
     "$SAMTOOLS" view \
         -@ "$THREADS" \
         -b \
-        -q 20 \
-        -F 2820 \
+        -q "$BAM_QUALITY" \
+        -F "$FILTER_FLAGS" \
         -o "$FILTERED_BAM" \
         "$MARKDUP_BAM"
 
