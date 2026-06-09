@@ -73,7 +73,7 @@ RUN_QUALIMAP=1
 
 BAM_QUALITY=20
 
-# This flag means to exclude reads that^
+# This flag means to exclude reads that:
 # * are unmapped
 # * are secondary or supplementary alignments
 # * failed quality control
